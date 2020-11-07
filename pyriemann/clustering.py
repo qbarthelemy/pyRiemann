@@ -1,6 +1,6 @@
 """Clustering functions."""
 import numpy
-from scipy.stats import norm
+from scipy.stats import norm, chi2
 from sklearn.base import (BaseEstimator, ClassifierMixin, TransformerMixin,
                           ClusterMixin)
 from sklearn.cluster._kmeans import _init_centroids
@@ -282,9 +282,9 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
     References
     ----------
     [1] A. Barachant, A. Andreev and M. Congedo, "The Riemannian Potato: an
-    automatic and adaptive artifact detection method for online experiments
-    using Riemannian geometry", in Proceedings of TOBI Workshop IV, p. 19-20,
-    2013.
+        automatic and adaptive artifact detection method for online experiments
+        using Riemannian geometry", in Proceedings of TOBI Workshop IV,
+        p. 19-20, 2013.
     """
 
     def __init__(self, metric='riemann', threshold=3, n_iter_max=100,
@@ -356,7 +356,7 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
 
         Returns
         -------
-        z : ndarray, shape (n_trials)
+        z : ndarray, shape (n_trials,)
             the normalized log-distance to the centroid.
         """
         d = numpy.squeeze(numpy.log(self._mdm.transform(X)), axis=1)
@@ -373,7 +373,7 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
 
         Returns
         -------
-        pred : ndarray of bool, shape (n_trials)
+        pred : ndarray of bool, shape (n_trials,)
             the artefact detection. True if the trial is clean, and False if
             the trial contain an artefact.
         """
@@ -411,4 +411,150 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
     def _get_proba(self, z):
         """get right-tailed proba from z-score."""
         proba = 1 - norm.cdf(z)
+        return proba
+
+
+class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
+
+    """Artefact detection with the Riemannian Potato Field.
+
+    The Riemannian Potato Field [1] is a clustering method used to detect
+    artifact in EEG signals. The algorithm combines several potatoes of low
+    dimension, each one being designed to capture specific artifact typically
+    affecting specific spatial areas (i.e., to a subset of channels) and/or
+    specific frequency bands.
+
+    Parameters
+    ----------
+    n_potatoes : int (default 1)
+        Number of potatoes in the field.
+    p_threshold : float (default 0.01)
+        Threshold on probability to being clean.
+    metric : string (default 'riemann')
+        The type of metric used for centroid and distance estimation.
+    z_threshold : float (default 3)
+        Threshold on z-score of distance to the centroid.
+    n_iter_max : int (default 10)
+        The maximum number of iteration to reach convergence.
+    pos_label: int (default 1)
+        The positive label corresponding to clean data.
+    neg_label: int (default 0)
+        The negative label corresponding to artifact data.
+
+    Notes
+    -----
+    .. versionadded:: 0.2.7
+
+    See Also
+    --------
+    Potato
+
+    References
+    ----------
+    [1] Q. Barthélemy, L. Mayaud, D. Ojeda, M. Congedo, "The Riemannian potato
+        field: a tool for online signal quality index of EEG", IEEE TNSRE, 2019
+    """
+
+    def __init__(self, n_potatoes=1, p_threshold=0.01, metric='riemann',
+                 z_threshold=3, n_iter_max=10, pos_label=1, neg_label=0):
+        """Init."""
+        self.n_potatoes = n_potatoes
+        self.p_threshold = p_threshold
+        if pos_label == neg_label:
+            raise(ValueError("Positive and Negative labels must be different"))
+        self.pos_label = pos_label
+        self.neg_label = neg_label
+        self._potato_field = n_potatoes * [Potato(metric=metric,
+                                                  threshold=z_threshold,
+                                                  n_iter_max=n_iter_max,
+                                                  pos_label=pos_label,
+                                                  neg_label=neg_label)]
+
+    def fit(self, X, y=None):
+        """Fit the potato field from covariance matrices.
+
+        Parameters
+        ----------
+        X : list of n_potatoes ndarray, each having a shape (n_trials, n_channels_i, n_channels_i)
+            list of ndarray of SPD matrices.
+        y : ndarray | None (default None)
+            Not used, here for compatibility with sklearn API.
+
+        Returns
+        -------
+        self : Potato field instance
+            The Potato field instance.
+        """
+        if len(X) != self.n_potatoes:
+            raise ValueError('Length of X must be equal to n_potatoes')
+
+        for i in range(self.n_potatoes):
+            self._potato_field[i].fit(X[i], y)
+            
+        return self
+
+    def transform(self, X):
+        """return the normalized log-distances to the centroids (z-score).
+
+        Parameters
+        ----------
+        X : list of n_potatoes ndarray, each one having a shape (n_trials, n_channels_i, n_channels_i)
+            list of ndarray of SPD matrices.
+
+        Returns
+        -------
+        z : ndarray, shape (n_potatoes, n_trials)
+            the normalized log-distances to the centroids.
+        """
+        z = numpy.zeros((self.n_potatoes, X[0].shape[0]))
+        for i in range(self.n_potatoes):
+            z[i] = self._potato_field[i].transform(X[i])
+        return z
+
+    def predict(self, X):
+        """predict artefact from data.
+
+        Parameters
+        ----------
+        X : list of n_potatoes ndarray, each having a shape (n_trials, n_channels_i, n_channels_i)
+            list of ndarray of SPD matrices.
+
+        Returns
+        -------
+        pred : ndarray of bool, shape (n_trials,)
+            the artefact detection. True if the trial is clean, and False if
+            the trial contain an artefact.
+        """
+        p = self.predict_proba(X)
+        pred = p > self.p_threshold
+        out = numpy.zeros_like(p) + self.neg_label
+        out[pred] = self.pos_label
+        return out
+
+    def predict_proba(self, X):
+        """probability obtained combining probabilities of potatoes using
+        Fisher's method.
+
+        Parameters
+        ----------
+        X : list of n_potatoes ndarray, each having a shape (n_trials,
+            n_channels_i, n_channels_i)
+            list of ndarray of SPD matrices.
+
+        Returns
+        -------
+        proba : ndarray, shape (n_trials,)
+            data is considered as normal/clean for high value of proba.
+            data is considered as abnormal/artifacted for low value of proba.
+        """
+        p = numpy.zeros((self.n_potatoes, X[0].shape[0]))
+        for i in range(self.n_potatoes):
+            p[i] = self._potato_field[i].predict_proba(X[i])
+        q = - 2 * numpy.sum(numpy.log(p), axis=0)
+        proba = self._get_proba(q)
+        return proba
+
+    def _get_proba(self, q):
+        """get proba from a chi-squared value q."""
+        proba = 1 - chi2.cdf(q, df=2 * self.n_potatoes)
         return proba

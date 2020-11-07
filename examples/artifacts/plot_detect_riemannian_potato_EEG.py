@@ -1,7 +1,7 @@
 """
-=========================================
+===============================================================================
 Artifact Detection with Riemannian Potato
-=========================================
+===============================================================================
 
 Example of Riemannian Potato [1] applied on EEG time-series to detect artifacts
 in online processing. It is computed only for two channels to display intuitive
@@ -14,7 +14,7 @@ visualizations.
 from functools import partial
 
 import numpy as np
-from mne.datasets import sample
+from mne.datasets import sample                    # tested with mne 0.21
 from mne import Epochs, make_fixed_length_events
 from mne.io import read_raw_fif
 from pyriemann.estimation import Covariances
@@ -90,7 +90,8 @@ raw.filter(1., 35., method='iir', picks=ch_names)
 duration = 2.5    # duration of epochs
 interval = 0.25   # interval between epochs
 events = make_fixed_length_events(raw, id=1, duration=interval)
-epochs = Epochs(raw, events, tmin=0., tmax=duration, verbose=False)
+epochs = Epochs(raw, events, tmin=0., tmax=duration, baseline=None,
+                verbose=False)
 epochs_data = 5e5 * epochs.get_data(picks=ch_names)
 
 # Estimate spatial covariance matrices
