@@ -1,7 +1,8 @@
 import numpy as np
 from nose.tools import assert_raises
 from numpy.testing import assert_array_equal
-from pyriemann.clustering import Kmeans, KmeansPerClassTransform, Potato
+from pyriemann.clustering import (Kmeans, KmeansPerClassTransform, Potato,
+                                  PotatoField)
 
 
 def generate_cov(Nt, Ne):
@@ -100,3 +101,32 @@ def test_Potato_init():
 
     # different positive and neg label
     assert_raises(ValueError, Potato, pos_label=0)
+
+
+def test_PotatoField_init():
+    """Test PotatoField"""
+    covsets = [generate_cov(20, 2), generate_cov(20, 5), generate_cov(20, 3)]
+
+    # init
+    assert_raises(ValueError, PotatoField, n_potatoes=0) # value too low
+    assert_raises(ValueError, PotatoField, p_threshold=0) # value out of bounds
+    assert_raises(ValueError, PotatoField, p_threshold=1)
+    pf = PotatoField(n_potatoes=1)
+    pf = PotatoField(n_potatoes=3)
+
+    # fit
+    pf.fit(covsets)
+    assert_raises(ValueError, pf.fit, covsets[0]) # unequal # of potatoes
+
+    # transform
+    pf.transform(covsets)
+    assert_raises(ValueError, pf.transform, # unequal # of trials
+    [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])
+
+    # predict
+    pf.predict(covsets)
+
+    # predict_proba
+    pf.predict_proba(covsets)
+    assert_raises(ValueError, pf.predict_proba, # unequal # of trials
+    [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])

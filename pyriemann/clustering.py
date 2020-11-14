@@ -2,7 +2,7 @@
 import numpy
 from scipy.stats import norm, chi2
 from sklearn.base import (BaseEstimator, ClassifierMixin, TransformerMixin,
-                          ClusterMixin)
+                          ClusterMixin, clone)
 from sklearn.cluster._kmeans import _init_centroids
 from joblib import Parallel, delayed
 
@@ -282,9 +282,9 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
     References
     ----------
     [1] A. Barachant, A. Andreev and M. Congedo, "The Riemannian Potato: an
-        automatic and adaptive artifact detection method for online experiments
-        using Riemannian geometry", in Proceedings of TOBI Workshop IV,
-        p. 19-20, 2013.
+    automatic and adaptive artifact detection method for online experiments
+    using Riemannian geometry", in Proceedings of TOBI Workshop IV, p. 19-20,
+    2013.
     """
 
     def __init__(self, metric='riemann', threshold=3, n_iter_max=100,
@@ -421,7 +421,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
     The Riemannian Potato Field [1] is a clustering method used to detect
     artifact in EEG signals. The algorithm combines several potatoes of low
     dimension, each one being designed to capture specific artifact typically
-    affecting specific spatial areas (i.e., to a subset of channels) and/or
+    affecting specific subsets of channels (of dimension n_channels_i) and/or
     specific frequency bands.
 
     Parameters
@@ -429,7 +429,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
     n_potatoes : int (default 1)
         Number of potatoes in the field.
     p_threshold : float (default 0.01)
-        Threshold on probability to being clean.
+        Threshold on probability to being clean, in ]0, 1[.
     metric : string (default 'riemann')
         The type of metric used for centroid and distance estimation.
     z_threshold : float (default 3)
@@ -452,23 +452,29 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
     References
     ----------
     [1] Q. Barthélemy, L. Mayaud, D. Ojeda, M. Congedo, "The Riemannian potato
-        field: a tool for online signal quality index of EEG", IEEE TNSRE, 2019
+    field: a tool for online signal quality index of EEG", IEEE TNSRE, 2019.
     """
 
     def __init__(self, n_potatoes=1, p_threshold=0.01, metric='riemann',
                  z_threshold=3, n_iter_max=10, pos_label=1, neg_label=0):
         """Init."""
+        if n_potatoes < 1:
+            raise ValueError('Parameter n_potatoes must at least 1')
         self.n_potatoes = n_potatoes
+        if not 0 < p_threshold < 1:
+            raise ValueError('Parameter p_threshold must be in ]0, 1[')
         self.p_threshold = p_threshold
-        if pos_label == neg_label:
-            raise(ValueError("Positive and Negative labels must be different"))
         self.pos_label = pos_label
         self.neg_label = neg_label
-        self._potato_field = n_potatoes * [Potato(metric=metric,
-                                                  threshold=z_threshold,
-                                                  n_iter_max=n_iter_max,
-                                                  pos_label=pos_label,
-                                                  neg_label=neg_label)]
+        pt = Potato(
+            metric=metric,
+            threshold=z_threshold,
+            n_iter_max=n_iter_max,
+            pos_label=pos_label,
+            neg_label=neg_label)
+        self._potato_field = []
+        for i in range(self.n_potatoes):
+            self._potato_field.append(clone(pt))
 
     def fit(self, X, y=None):
         """Fit the potato field from covariance matrices.
@@ -506,8 +512,11 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         z : ndarray, shape (n_potatoes, n_trials)
             the normalized log-distances to the centroids.
         """
-        z = numpy.zeros((self.n_potatoes, X[0].shape[0]))
+        n_trials = X[0].shape[0]
+        z = numpy.zeros((self.n_potatoes, n_trials))
         for i in range(self.n_potatoes):
+            if X[i].shape[0] != n_trials:
+                raise ValueError('Unequal n_trials between ndarray of X')
             z[i] = self._potato_field[i].transform(X[i])
         return z
 
@@ -537,8 +546,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
 
         Parameters
         ----------
-        X : list of n_potatoes ndarray, each having a shape (n_trials,
-            n_channels_i, n_channels_i)
+        X : list of n_potatoes ndarray, each having a shape (n_trials, n_channels_i, n_channels_i)
             list of ndarray of SPD matrices.
 
         Returns
@@ -547,8 +555,11 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
             data is considered as normal/clean for high value of proba.
             data is considered as abnormal/artifacted for low value of proba.
         """
-        p = numpy.zeros((self.n_potatoes, X[0].shape[0]))
+        n_trials = X[0].shape[0]
+        p = numpy.zeros((self.n_potatoes, n_trials))
         for i in range(self.n_potatoes):
+            if X[i].shape[0] != n_trials:
+                raise ValueError('Unequal n_trials between ndarray of X')
             p[i] = self._potato_field[i].predict_proba(X[i])
         q = - 2 * numpy.sum(numpy.log(p), axis=0)
         proba = self._get_proba(q)

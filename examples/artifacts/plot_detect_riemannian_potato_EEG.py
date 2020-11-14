@@ -13,10 +13,11 @@ visualizations.
 
 from functools import partial
 
+import os
 import numpy as np
 from mne.datasets import sample                    # tested with mne 0.21
-from mne import Epochs, make_fixed_length_events
 from mne.io import read_raw_fif
+from mne import Epochs, make_fixed_length_events
 from pyriemann.estimation import Covariances
 from pyriemann.clustering import Potato
 from matplotlib import pyplot as plt
@@ -68,7 +69,8 @@ def plot_sig(axis, time, signal, label):
 # Load EEG data
 # -------------
 
-raw_fname = sample.data_path() + '/MEG/sample/sample_audvis_filt-0-40_raw.fif'
+raw_fname = os.path.join(sample.data_path(), 'MEG', 'sample',
+                         'sample_audvis_filt-0-40_raw.fif')
 raw = read_raw_fif(raw_fname, preload=True, verbose=False)
 sfreq = int(raw.info['sfreq'])
 
@@ -175,11 +177,11 @@ cax_ep = fig.add_axes([0.847159,0.11,0.0143818,0.361429])
 # acquisition, processing and artifact detection of EEG time-series.
 # The potato is static: it is not updated when data is not artifacted.
 for t in test_set:
-    
+
     # Online artifact detection
     RP_label = RP.predict(covs[t][np.newaxis, ...])
     EP_label = EP.predict(covs[t][np.newaxis, ...])
-    
+
     # Update data
     RP_colors.append('b' if RP_label==1 else 'r')
     EP_colors.append('b' if EP_label==1 else 'r')
@@ -189,15 +191,15 @@ for t in test_set:
     b = max(test_set[0], t-test_cov_visu+1)
     time_start = t * interval + test_time_start
     time_end = t * interval + test_time_end
-    time = np.linspace(time_start, time_end, 
+    time = np.linspace(time_start, time_end,
                        int((time_end - time_start) * sfreq),
                        endpoint=False)[np.newaxis, :]
     # Update plot
-    plot_sig(ax_sig0, time.T, 
+    plot_sig(ax_sig0, time.T,
              eeg_data[0, int(time_start * sfreq):int(time_end * sfreq)].T,
              label=ch_names[0])
     ax_sig0.set_xlabel('Time (s)')
-    plot_sig(ax_sig1, time.T, 
+    plot_sig(ax_sig1, time.T,
              eeg_data[1, int(time_start * sfreq):int(time_end * sfreq)].T,
              label=ch_names[1])
     ax_sig1.set_xticks([])
