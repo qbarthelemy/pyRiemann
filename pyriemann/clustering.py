@@ -423,6 +423,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
     dimension, each one being designed to capture specific artifact typically
     affecting specific subsets of channels (of dimension n_channels_i) and/or
     specific frequency bands.
+    Current implementation is the static mode (no model update).
 
     Parameters
     ----------
@@ -472,9 +473,9 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
             n_iter_max=n_iter_max,
             pos_label=pos_label,
             neg_label=neg_label)
-        self._potato_field = []
+        self._potatoes = []
         for i in range(self.n_potatoes):
-            self._potato_field.append(clone(pt))
+            self._potatoes.append(clone(pt))
 
     def fit(self, X, y=None):
         """Fit the potato field from covariance matrices.
@@ -495,7 +496,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
             raise ValueError('Length of X must be equal to n_potatoes')
 
         for i in range(self.n_potatoes):
-            self._potato_field[i].fit(X[i], y)
+            self._potatoes[i].fit(X[i], y)
             
         return self
 
@@ -517,7 +518,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         for i in range(self.n_potatoes):
             if X[i].shape[0] != n_trials:
                 raise ValueError('Unequal n_trials between ndarray of X')
-            z[i] = self._potato_field[i].transform(X[i])
+            z[i] = self._potatoes[i].transform(X[i])
         return z
 
     def predict(self, X):
@@ -560,7 +561,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         for i in range(self.n_potatoes):
             if X[i].shape[0] != n_trials:
                 raise ValueError('Unequal n_trials between ndarray of X')
-            p[i] = self._potato_field[i].predict_proba(X[i])
+            p[i] = self._potatoes[i].predict_proba(X[i])
         q = - 2 * numpy.sum(numpy.log(p), axis=0)
         proba = self._get_proba(q)
         return proba

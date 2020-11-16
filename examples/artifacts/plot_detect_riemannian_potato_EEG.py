@@ -28,10 +28,10 @@ from matplotlib.patches import Rectangle
 ###############################################################################
 
 
-@partial(np.vectorize, excluded=['Potato'])
-def get_zscores(cov_00, cov_01, cov_11, Potato):
+@partial(np.vectorize, excluded=['potato'])
+def get_zscores(cov_00, cov_01, cov_11, potato):
     cov = np.array([[cov_00, cov_01], [cov_01, cov_11]])
-    return Potato.transform(cov[np.newaxis, ...])
+    return potato.transform(cov[np.newaxis, ...])
 
 
 def plot_potato_2D(axis, caxis, X, Y, P_zscore, P_center, P_colors, covs, *,
@@ -110,15 +110,15 @@ split_set = 40   # nb of matrices to train the potato
 # Calibrate potato by unsupervised training on first matrices: compute a
 # reference matrix, mean and standard deviation of distances to this reference.
 train_set = range(split_set)
-RP = Potato(metric='riemann', threshold=z_th).fit(covs[train_set])
-RP_center = RP._mdm.covmeans_[0]
-EP = Potato(metric='euclid', threshold=z_th).fit(covs[train_set])
-EP_center = EP._mdm.covmeans_[0]
+rp = Potato(metric='riemann', threshold=z_th).fit(covs[train_set])
+rp_center = rp._mdm.covmeans_[0]
+ep = Potato(metric='euclid', threshold=z_th).fit(covs[train_set])
+ep_center = ep._mdm.covmeans_[0]
 
-RP_labels = RP.predict(covs[train_set])
-RP_colors = ['b' if l==1 else 'r' for l in RP_labels.tolist()]
-EP_labels = EP.predict(covs[train_set])
-EP_colors = ['b' if l==1 else 'r' for l in EP_labels.tolist()]
+rp_labels = rp.predict(covs[train_set])
+rp_colors = ['b' if l==1 else 'r' for l in rp_labels.tolist()]
+ep_labels = ep.predict(covs[train_set])
+ep_colors = ['b' if l==1 else 'r' for l in ep_labels.tolist()]
 
 # 2D projection of the z-score map of the Riemannian potato, for 2x2 covariance
 # matrices (in blue if clean, in red if artifacted) and their reference matrix
@@ -127,9 +127,9 @@ EP_colors = ['b' if l==1 else 'r' for l in EP_labels.tolist()]
 
 # Zscores in the horizontal 2D plane going through the reference
 X, Y = np.meshgrid(np.linspace(1, 31, 100), np.linspace(1, 31, 100))
-RP_zscore2D = get_zscores(X, np.full_like(X, RP_center[0, 1]), Y, Potato=RP)
-RP_zscore2D_m = np.ma.masked_where(~np.isfinite(RP_zscore2D), RP_zscore2D)
-EP_zscore2D = get_zscores(X, np.full_like(X, EP_center[0, 1]), Y, Potato=EP)
+rp_zscore2D = get_zscores(X, np.full_like(X, rp_center[0, 1]), Y, potato=rp)
+rp_zscore2D_m = np.ma.masked_where(~np.isfinite(rp_zscore2D), rp_zscore2D)
+ep_zscore2D = get_zscores(X, np.full_like(X, ep_center[0, 1]), Y, potato=ep)
 
 # Plot offline calibration
 xlabel = 'Cov({},{})'.format(ch_names[0], ch_names[0])
@@ -137,11 +137,11 @@ ylabel = 'Cov({},{})'.format(ch_names[1], ch_names[1])
 
 fig, axs = plt.subplots(nrows=1, ncols=2, figsize=(12, 5))
 fig.suptitle('Offline calibration of potatoes', fontsize=16)
-plot_potato_2D(axs[0], None, X, Y, RP_zscore2D_m, RP_center, RP_colors,
+plot_potato_2D(axs[0], None, X, Y, rp_zscore2D_m, rp_center, rp_colors,
                covs[train_set], xlabel=xlabel, ylabel=ylabel,
                title='2D projection of Riemannian potato', 
                cblabel='Z-score of Riemannian distance to reference')
-plot_potato_2D(axs[1], None, X, Y, EP_zscore2D, EP_center, EP_colors,
+plot_potato_2D(axs[1], None, X, Y, ep_zscore2D, ep_center, ep_colors,
                covs[train_set], xlabel=xlabel, ylabel=ylabel,
                title='2D projection of Euclidean potato', 
                cblabel='Z-score of Euclidean distance to reference')
@@ -160,8 +160,8 @@ test_time_end = 5       # end time to display time-series
 test_set = range(split_set, test_cov_max)
 alphas = np.linspace(0, 1, test_cov_visu)
 eeg_data = 3e5 * raw.get_data(picks=ch_names)
-RP_colors = []
-EP_colors = []
+rp_colors = []
+ep_colors = []
 
 # Plot online detection (an interactive window is required)
 fig = plt.figure(figsize=(12, 10))
@@ -179,16 +179,16 @@ cax_ep = fig.add_axes([0.847159,0.11,0.0143818,0.361429])
 for t in test_set:
 
     # Online artifact detection
-    RP_label = RP.predict(covs[t][np.newaxis, ...])
-    EP_label = EP.predict(covs[t][np.newaxis, ...])
+    rp_label = rp.predict(covs[t][np.newaxis, ...])
+    ep_label = ep.predict(covs[t][np.newaxis, ...])
 
     # Update data
-    RP_colors.append('b' if RP_label==1 else 'r')
-    EP_colors.append('b' if EP_label==1 else 'r')
-    if len(RP_colors) > test_cov_visu:
-        RP_colors.pop(0)
-        EP_colors.pop(0)
-    b = max(test_set[0], t-test_cov_visu+1)
+    rp_colors.append('b' if rp_label==1 else 'r')
+    ep_colors.append('b' if ep_label==1 else 'r')
+    if len(rp_colors) > test_cov_visu:
+        rp_colors.pop(0)
+        ep_colors.pop(0)
+    b = max(test_set[0], t - test_cov_visu + 1)
     time_start = t * interval + test_time_start
     time_end = t * interval + test_time_end
     time = np.linspace(time_start, time_end,
@@ -203,16 +203,16 @@ for t in test_set:
              eeg_data[1, int(time_start * sfreq):int(time_end * sfreq)].T,
              label=ch_names[1])
     ax_sig1.set_xticks([])
-    plot_potato_2D(ax_rp, cax_rp, X, Y, RP_zscore2D_m, RP_center, RP_colors,
+    plot_potato_2D(ax_rp, cax_rp, X, Y, rp_zscore2D_m, rp_center, rp_colors,
                    covs[b:t+1], xlabel=xlabel, ylabel=ylabel,
                    title='2D projection of Riemannian potato',
                    cblabel='Z-score of Riemannian distance to reference',
-                   alphas=alphas[-len(RP_colors):])
-    plot_potato_2D(ax_ep, cax_ep, X, Y, EP_zscore2D, EP_center, EP_colors,
+                   alphas=alphas[-len(rp_colors):])
+    plot_potato_2D(ax_ep, cax_ep, X, Y, ep_zscore2D, ep_center, ep_colors,
                    covs[b:t+1], xlabel=xlabel, ylabel=ylabel,
                    title='2D projection of Euclidean potato',
                    cblabel='Z-score of Euclidean distance to reference',
-                   alphas=alphas[-len(EP_colors):])
+                   alphas=alphas[-len(ep_colors):])
     plt.pause(0.5)
     plt.draw()
 
