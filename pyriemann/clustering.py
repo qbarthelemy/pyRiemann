@@ -484,7 +484,7 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         ----------
         X : list of n_potatoes ndarray, each having a shape (n_trials, n_channels_i, n_channels_i)
             list of ndarray of SPD matrices.
-        y : ndarray | None (default None)
+        y : None
             Not used, here for compatibility with sklearn API.
 
         Returns

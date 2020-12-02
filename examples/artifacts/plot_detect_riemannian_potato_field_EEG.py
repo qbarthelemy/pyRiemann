@@ -17,11 +17,19 @@ from mne.io import read_raw_fif
 from mne import Epochs, make_fixed_length_events
 from pyriemann.estimation import Covariances
 from pyriemann.clustering import Potato, PotatoField
+# from pyriemann.utils.covariance import normalize_trace
 from matplotlib import pyplot as plt
 from matplotlib.patches import Rectangle
 
 
 ###############################################################################
+
+
+def normalize_trace(matrices): # TODO SUPP
+    traces = np.trace(matrices, axis1=-2, axis2=-1)
+    while traces.ndim != matrices.ndim:
+        traces = traces[..., np.newaxis]
+    return matrices / traces
 
 
 def set_channels(raw):
@@ -39,7 +47,7 @@ def set_channels(raw):
 
 
 def filter_bandpass(signal, low_freq, high_freq, channels=None, method="iir"):
-    """Filter signal on specific channels nad in a specific frequency band"""
+    """Filter signal on specific channels and in a specific frequency band"""
     sig = signal.copy()
     if channels is not None:
         sig.pick_channels(channels)
@@ -60,22 +68,22 @@ def plot_rect(axis, RP_label, RPF_label):
     height = ylims[1] - ylims[0]
     if not RP_label:
         axis.add_patch(
-            Rectangle((time[0, 0] - 0.98 * test_time_start,
+            Rectangle((time[0] - 0.98 * test_time_start,
                 ylims[0] + 0.02 * height),
                 width=duration, height=0.96 * height, edgecolor='r',
                 facecolor='none', linestyle='dashed'))
-        axis.text(time[0, 0] - 0.85 * test_time_start,
+        axis.text(time[0] - 0.85 * test_time_start,
                   ylims[1] - 0.05 * height, 'RP', color='r', size=16)
     if not RPF_label:
         axis.add_patch(
-            Rectangle((time[0, 0] - test_time_start, ylims[0] + 0.01 * height),
+            Rectangle((time[0] - test_time_start, ylims[0] + 0.01 * height),
                 width=1.01 * duration, height=0.98 * height,
                 edgecolor='violet', facecolor='none', linestyle='dashed'))
-        axis.text(time[0, 0] - test_time_start + 1.03 * duration,
+        axis.text(time[0] - test_time_start + 1.03 * duration,
             ylims[1] - 0.05 * height, 'RPF', color='violet', size=16)
     if RP_label and RPF_label:
         axis.add_patch(
-            Rectangle((time[0, 0] - test_time_start, ylims[0] + 0.02 * height),
+            Rectangle((time[0] - test_time_start, ylims[0] + 0.02 * height),
                 width=duration, height=0.96 * height, edgecolor='b',
                 facecolor='none'))
 
@@ -94,15 +102,20 @@ sfreq = int(raw.info['sfreq'])
 # Offline processing of EEG data
 # ------------------------------
 
+#TODO: cut half of signal
+
 # Apply common average reference on EEG channels
-raw.pick_types(meg=False, eeg=True).set_eeg_reference(ref_channels='average',
-                                                      projection=False) #TODO
+raw.pick_types(meg=False, eeg=True).set_eeg_reference(
+    ref_channels='average', projection=False) #TODO: check
 
 # Select the usual 21 channels of the 10-20 montage
 raw = set_channels(raw)
 ch_names = raw.ch_names
 ch_count = len(ch_names)
-raw.plot_sensors(ch_type='eeg', show_names=True)
+raw.plot_sensors(ch_type='eeg', show_names=True,
+    title='EEG channel localizations')
+# TODO: add ch_groups
+# https://mne.tools/stable/generated/mne.viz.plot_sensors.html
 
 # Define time-series epoching with a sliding window
 duration = 2.5    # duration of epochs
@@ -123,6 +136,8 @@ rp_sig = filter_bandpass(raw, 1., 35.)
 rp_epochs = Epochs(rp_sig, events, tmin=0., tmax=duration, baseline=None,
                    verbose=False)
 rp_covs = Covariances(estimator='lwf').transform(5e5 * rp_epochs.get_data())
+# Trace-normalize covariance matrices
+rp_covs = normalize_trace(rp_covs)
 RP = Potato(metric='riemann', threshold=z_th).fit(rp_covs[train_set])
 
 # Riemannian potato field (RPF): it combines several potatoes of low dimension,
@@ -134,21 +149,21 @@ rpf_config = {
     'eye_blinks': {'ch_names': ['Fp1', 'Fpz', 'Fp2'], # for eye-blinks
                    'low_freq': 1.,
                    'high_freq': 20.},
-    'left': {'ch_names': ['F7', 'T7', 'P7'], # for muscular artifacts
-             'low_freq': 55.,                # in left area
-             'high_freq': 95.},
-    'right': {'ch_names': ['F8', 'T8', 'P8'], # for muscular artifacts
-              'low_freq': 55.,                # in right area
-              'high_freq': 95.},
-    'occipital': {'ch_names': ['O1', 'Oz', 'O2'], # for muscular artifacts
-                  'low_freq': 55.,                # in occipital area
-                  'high_freq': 95.},
-    'global_lf': {'ch_names': None, # for low-frequency artifacts
-                  'low_freq': 0.5,  # in all channels
-                  'high_freq': 3.},
-    'global_hf': {'ch_names': None, # for global high-frequency artifacts
-                  'low_freq': 25.,  # in all channels
-                  'high_freq': 95.}
+    'left':       {'ch_names': ['F7', 'T7', 'P7'], # for muscular artifacts
+                   'low_freq': 55.,                # in left area
+                   'high_freq': 95.},
+    'right':      {'ch_names': ['F8', 'T8', 'P8'], # for muscular artifacts
+                   'low_freq': 55.,                # in right area
+                   'high_freq': 95.},
+    'occipital':  {'ch_names': ['O1', 'Oz', 'O2'], # for muscular artifacts
+                   'low_freq': 55.,                # in occipital area
+                   'high_freq': 95.},
+    'global_lf':  {'ch_names': None, # for low-frequency artifacts
+                   'low_freq': 0.5,  # in all channels
+                   'high_freq': 3.},
+    'global_hf':  {'ch_names': None, # for global high-frequency artifacts
+                   'low_freq': 25.,  # in all channels
+                   'high_freq': 95.}
    }
 
 rpf_covs = []
@@ -158,7 +173,7 @@ for _, p in rpf_config.items():
     rpf_epochs = Epochs(rpf_sig, events, tmin=0., tmax=duration, baseline=None,
                         verbose=False)
     cov_ = Covariances(estimator='lwf').transform(5e5 * rpf_epochs.get_data())
-    rpf_covs.append(cov_)
+    rpf_covs.append(normalize_trace(cov_))
 RPF = PotatoField(metric='riemann', z_threshold=z_th, p_threshold=p_th,
                   n_potatoes=len(rpf_config)).fit(rpf_covs[train_set])
 
@@ -166,6 +181,11 @@ RPF = PotatoField(metric='riemann', z_threshold=z_th, p_threshold=p_th,
 ###############################################################################
 # Online Artifact Detection with Potatoes
 # ---------------------------------------
+
+# Detect artifacts/outliers on test set, with an animation to imitate an online
+# acquisition, processing and artifact detection of EEG time-series.
+# Remak that all these potatoes are static: they are not updated when EEG is
+# not artifacted.
 
 test_cov_max = 500      # nb of matrices to visualize in this example
 test_time_start = -2    # start time to display time-series
@@ -176,14 +196,9 @@ eeg_data = 3e5 * raw.get_data()
 eeg_offset = - 15 * np.linspace(1, ch_count, ch_count, endpoint=False)
 
 # Plot online detection (an interactive window is required)
-fig = plt.figure(figsize=(12, 10))
+fig, ax = plt.subplots(figsize=(12, 10), nrows=1, ncols=1)
 fig.suptitle('Online artifact detection, RP vs RPF', fontsize=16)
-ax = fig.add_axes([0.1, 0.1, 0.8, 0.8])
 
-# Detect artifacts/outliers on test set, with a loop to imitate an online
-# acquisition, processing and artifact detection of EEG time-series.
-# Remak that all these potatoes are static: they are not updated when data is
-# not artifacted.
 for t in test_set:
 
     # Online artifact detection
@@ -194,7 +209,8 @@ for t in test_set:
     time_start = t * interval + test_time_start
     time_end = t * interval + test_time_end
     time = np.linspace(time_start, time_end,
-        int((time_end - time_start) * sfreq), endpoint=False)[np.newaxis, :]
+        int((time_end - time_start) * sfreq), endpoint=False)
+
     # Update plot
     plot_sig(ax, time.T,
         eeg_data[:, int(time_start * sfreq):int(time_end * sfreq)].T,
@@ -210,6 +226,7 @@ for t in test_set:
 # ----------
 # [1] Q. Barthélemy, L. Mayaud, D. Ojeda, M. Congedo, "The Riemannian potato
 # field: a tool for online signal quality index of EEG", IEEE TNSRE, 2019.
+#
 # [2] A. Barachant, A. Andreev, M. Congedo, "The Riemannian Potato: an
 # automatic and adaptive artifact detection method for online experiments using
 # Riemannian geometry", Proc. TOBI Workshop IV, 2013.
