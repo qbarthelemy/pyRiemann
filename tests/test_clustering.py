@@ -64,6 +64,7 @@ def test_KmeansPCT_init():
 def test_Potato_init():
     """Test Potato"""
     covset = generate_cov(20, 3)
+    cov = covset[0][np.newaxis, ...]
     labels = np.array([0, 1]).repeat(10)
 
     # init
@@ -83,6 +84,11 @@ def test_Potato_init():
 
     # predict
     pt.predict(covset)
+
+    # predict with update
+    pt.predict(cov, alpha=0.01)
+    assert_raises(ValueError, pt.predict, cov, alpha=-0.1) # alpha < 0
+    assert_raises(ValueError, pt.predict, cov, alpha=1.1)  # alpha > 1
 
     # predict_proba
     pt.predict_proba(covset)
@@ -121,7 +127,7 @@ def test_PotatoField_init():
     # transform
     pf.transform(covsets)
     assert_raises(ValueError, pf.transform, # unequal # of trials
-    [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])
+        [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])
 
     # predict
     pf.predict(covsets)
@@ -129,4 +135,4 @@ def test_PotatoField_init():
     # predict_proba
     pf.predict_proba(covsets)
     assert_raises(ValueError, pf.predict_proba, # unequal # of trials
-    [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])
+        [generate_cov(20, 2), generate_cov(10, 5), generate_cov(20, 3)])

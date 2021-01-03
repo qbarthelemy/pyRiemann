@@ -7,6 +7,7 @@ from sklearn.cluster._kmeans import _init_centroids
 from joblib import Parallel, delayed
 
 from .classification import MDM
+from .utils.geodesic import geodesic
 
 #######################################################################
 
@@ -363,13 +364,17 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
         z = self._get_z_score(d)
         return z
 
-    def predict(self, X):
-        """predict artefact from data.
+    def predict(self, X, alpha=0):
+        """predict artefact from data, and optionally update potato.
 
         Parameters
         ----------
         X : ndarray, shape (n_trials, n_channels, n_channels)
             ndarray of SPD matrices.
+        alpha : float (default 0)
+            Learning rate in [0, 1] for the centroid, and mean and standard
+            deviation of log-distances.
+            Update is possible only for online setting, ie when n_trials=1.
 
         Returns
         -------
@@ -381,17 +386,16 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
         pred = z < self.threshold
         out = numpy.zeros_like(z) + self.neg_label
         out[pred] = self.pos_label
-        return out
 
-    def _get_z_score(self, d):
-        """get z score from distance."""
-        z = (d - self._mean) / self._std
-        return z
+        if len(X) == 1 and pred[0] == True:
+            self._update_potato(X, alpha)
+
+        return out
 
     def predict_proba(self, X):
         """probability of being clean / belonging to the potato.
-        Essentially, it is the probability to reject the null hypothesis 
-        "clean data". A threshold of 0.01 can be used.
+        It is the probability to reject the null hypothesis "clean data",
+        computing the right-tailed probability from z-score.
 
         Parameters
         ----------
@@ -408,10 +412,28 @@ class Potato(BaseEstimator, TransformerMixin, ClassifierMixin):
         proba = self._get_proba(z)
         return proba
 
+    def _get_z_score(self, d):
+        """get z-score from distance."""
+        z = (d - self._mean) / self._std
+        return z
+
     def _get_proba(self, z):
         """get right-tailed proba from z-score."""
         proba = 1 - norm.cdf(z)
         return proba
+
+    def _update_potato(self, X, alpha):
+        """update the potato centroid, the mean and standard deviation of
+        distances."""
+        if not 0 <= alpha <= 1:
+            raise ValueError('Parameter alpha must be in [0, 1]')
+        if alpha > 0:
+            self._mdm.covmeans_[0] = geodesic(
+                self._mdm.covmeans_[0], X[0], alpha, metric=self.metric)
+            d = numpy.squeeze(numpy.log(self._mdm.transform(X)))
+            self._mean = (1 - alpha) * self._mean + alpha * d
+            self._std = numpy.sqrt(
+                (1 - alpha) * self._std**2 + alpha * (d - self._mean)**2)
 
 
 class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
@@ -423,7 +445,9 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
     dimension, each one being designed to capture specific artifact typically
     affecting specific subsets of channels (of dimension n_channels_i) and/or
     specific frequency bands.
-    Current implementation is the static mode (no model update).
+
+    Default implementation is the static mode (no model update).
+    Dynamic mode is possible in online setting (n_trials=1).
 
     Parameters
     ----------
@@ -501,7 +525,8 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         return self
 
     def transform(self, X):
-        """return the normalized log-distances to the centroids (z-score).
+        """return the normalized log-distances to the centroids
+        (ie the geometric z-scores of distances).
 
         Parameters
         ----------
@@ -521,13 +546,17 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
             z[i] = self._potatoes[i].transform(X[i])
         return z
 
-    def predict(self, X):
-        """predict artefact from data.
+    def predict(self, X, alpha=0):
+        """predict artefact from data, and optionally update potatoes.
 
         Parameters
         ----------
         X : list of n_potatoes ndarray, each having a shape (n_trials, n_channels_i, n_channels_i)
             list of ndarray of SPD matrices.
+        alpha : float (default 0)
+            Learning rate in [0, 1] for the centroid, and mean and standard
+            deviation of log-distances.
+            Update is possible only for online setting, ie when n_trials=1.
 
         Returns
         -------
@@ -539,11 +568,15 @@ class PotatoField(BaseEstimator, TransformerMixin, ClassifierMixin):
         pred = p > self.p_threshold
         out = numpy.zeros_like(p) + self.neg_label
         out[pred] = self.pos_label
+
+        for i in range(self.n_potatoes):
+            self._potatoes[i]._update_potato(X[i], alpha)
+
         return out
 
     def predict_proba(self, X):
         """probability obtained combining probabilities of potatoes using
-        Fisher's method.
+        Fisher's method. A threshold of 0.01 can be used.
 
         Parameters
         ----------
