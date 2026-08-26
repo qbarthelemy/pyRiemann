@@ -103,8 +103,8 @@ def test_tlsplitter(rndstate, cv):
     cv = TLSplitter(target_domain="target_domain", cv=cv)
     train_idx, test_idx = next(cv.split(X, y_enc))
 
-    assert len(train_idx) == 90  # 50 from source and 4/5*100 from target
-    assert len(test_idx) == 10  # 1/5*100 from target
+    assert train_idx.shape == (90,)  # 50 from source and 4/5*100 from target
+    assert test_idx.shape == (10,)  # 1/5*100 from target
     assert cv.get_n_splits() == 5
 
 
@@ -129,7 +129,9 @@ def test_tldummy(rndstate, space):
 
 @pytest.mark.parametrize("metric", ["riemann", "euclid"])
 @pytest.mark.parametrize("use_weight", [True, False])
-@pytest.mark.parametrize("target_domain", ["target_domain", ""])
+@pytest.mark.parametrize(
+    "target_domain", ["target_domain", "last", "transductive"]
+)
 def test_tlcenter_manifold(rndstate, get_weights,
                            metric, use_weight, target_domain):
     """Test centering matrices to identity"""
@@ -149,11 +151,9 @@ def test_tlcenter_manifold(rndstate, get_weights,
     # Test fit
     rct.fit(X, y_enc, sample_weight=weights)
 
-    # Test fit_transform, if the mean of each domain is indeed identity
-    X_rct = rct.fit_transform(X, y_enc, sample_weight=weights)
-    for d in np.unique(domain):
+    def assert_transform(d):
         idx = domain == d
-        Xd = X_rct[idx]
+        Xd = X_new[idx]
         if use_weight:
             weights_d = check_weights(weights[idx], np.sum(idx), like=Xd)
             Md = gmean(Xd, metric=metric, sample_weight=weights_d)
@@ -161,13 +161,25 @@ def test_tlcenter_manifold(rndstate, get_weights,
             Md = gmean(Xd, metric=metric)
         assert Md == pytest.approx(np.eye(2))
 
-    # Test transform
-    rct.transform(X)
+    # Test fit_transform, if the mean of each domain is indeed identity
+    X_new = rct.fit_transform(X, y_enc, sample_weight=weights)
+    for d in np.unique(domain):
+        assert_transform(d)
+
+    # Test transform: "transductive" recenters the whole input to its own
+    # recomputed (unweighted) mean, while "target_domain"/"last" only
+    # guarantee that the target domain's own slice is centered, weighted as
+    # it was when centers_ was fitted
+    X_new = rct.transform(X)
+    if target_domain == "transductive":
+        assert gmean(X_new, metric=metric) == pytest.approx(np.eye(2))
+    else:
+        assert_transform("target_domain")
 
 
 @pytest.mark.parametrize("metric", ["riemann", "euclid"])
 @pytest.mark.parametrize("use_weight", [True, False])
-@pytest.mark.parametrize("target_domain", ["target_domain", ""])
+@pytest.mark.parametrize("target_domain", ["target_domain", "last"])
 def test_tlcenter_manifold_fit_transf(rndstate, get_weights,
                                       metric, use_weight, target_domain):
     """Test .fit_transform() versus .fit().transform()"""
@@ -206,7 +218,9 @@ def test_tlcenter_manifold_fit_transf(rndstate, get_weights,
 
 
 @pytest.mark.parametrize("use_weight", [True, False])
-def test_tlcenter_tangentspace(rndstate, get_weights, use_weight):
+@pytest.mark.parametrize("target_domain", ["tgt", "last", "transductive"])
+def test_tlcenter_tangentspace(rndstate, get_weights, use_weight,
+                               target_domain):
     """Test centering tangent vectors to origin"""
     n_ts = 10
     X, y_enc = make_classification_transfer_tangspace(
@@ -222,21 +236,32 @@ def test_tlcenter_tangentspace(rndstate, get_weights, use_weight):
 
     _, _, domain = decode_domains(X, y_enc)
 
-    tlctr = TLCenter(target_domain="tgt")
+    tlctr = TLCenter(target_domain=target_domain)
 
+    # Test fit
     tlctr.fit(X, y_enc, sample_weight=weights)
 
-    # Test if the mean of each domain is indeed zero
-    X_rct = tlctr.fit_transform(X, y_enc, sample_weight=weights)
-    assert X_rct.shape == X.shape
-    for d in np.unique(domain):
+    def assert_transform(d):
         idx = domain == d
         weights_d = weights[idx] if weights is not None else None
-        md = np.average(X_rct[idx], axis=0, weights=weights_d)
+        md = np.average(X_new[idx], axis=0, weights=weights_d)
         assert_array_almost_equal(md, np.zeros((n_ts)))
 
-    X_rct = tlctr.transform(X)
-    assert X_rct.shape == X.shape
+    # Test fit_transform, if the mean of each domain is indeed zero
+    X_new = tlctr.fit_transform(X, y_enc, sample_weight=weights)
+    assert X_new.shape == X.shape
+    for d in np.unique(domain):
+        assert_transform(d)
+
+    # Test transform: "transductive" recenters the whole input to its own
+    # recomputed mean, while "tgt"/"last" only guarantee that the target
+    # domain's own slice is centered
+    X_new = tlctr.transform(X)
+    assert X_new.shape == X.shape
+    if target_domain == "transductive":
+        assert_array_almost_equal(np.mean(X_new, axis=0), np.zeros(n_ts))
+    else:
+        assert_transform("tgt")
 
 
 @pytest.mark.parametrize("use_centered_data", [True, False])
@@ -266,12 +291,12 @@ def test_tlscale_manifold(rndstate, get_weights,
         centered_data=use_centered_data,
         metric=metric
     )
-    X_str = tlstr.fit_transform(X, y_enc, sample_weight=weights)
+    X_new = tlstr.fit_transform(X, y_enc, sample_weight=weights)
 
     # Test if the dispersion of each domain is indeed 1
     for d in np.unique(domain):
         idx = domain == d
-        Xd = X_str[idx]
+        Xd = X_new[idx]
         if use_weight:
             weights_d = check_weights(weights[idx], np.sum(idx), like=Xd)
             Md = mean_riemann(Xd, sample_weight=weights_d)
@@ -307,17 +332,17 @@ def test_tlscale_tangentspace(rndstate, get_weights, use_weight):
     tlscl.fit(X, y_enc, sample_weight=weights)
 
     # Test if the mean of norms of each domain is indeed 1
-    X_scl = tlscl.fit_transform(X, y_enc, sample_weight=weights)
-    assert X_scl.shape == X.shape
+    X_new = tlscl.fit_transform(X, y_enc, sample_weight=weights)
+    assert X_new.shape == X.shape
     for d in np.unique(domain):
         idx = domain == d
         weights_d = weights[idx] if weights is not None else None
         assert np.average(
-            np.linalg.norm(X_scl[idx], axis=1), weights=weights_d
+            np.linalg.norm(X_new[idx], axis=1), weights=weights_d
         ) == pytest.approx(1)
 
-    X_scl = tlscl.transform(X)
-    assert X_scl.shape == X.shape
+    X_new = tlscl.transform(X)
+    assert X_new.shape == X.shape
 
 
 @pytest.mark.parametrize("metric", ["euclid", "riemann"])
@@ -383,10 +408,11 @@ def test_tlrotate_manifold(rndstate, get_weights, metric, use_weight):
     assert_array_equal(X_rot, X_rct)
 
 
+@pytest.mark.parametrize("expl_var", [0.97, 1, 3])
 @pytest.mark.parametrize("n_components", [1, 3, "max"])
 @pytest.mark.parametrize("n_clusters", [1, 2, 5])
 @pytest.mark.parametrize("use_weight", [True, False])
-def test_tlrotate_tangentspace(rndstate, get_weights,
+def test_tlrotate_tangentspace(rndstate, get_weights, expl_var,
                                n_components, n_clusters, use_weight):
     """Test rotating vectors"""
     n_ts = 10
@@ -405,6 +431,7 @@ def test_tlrotate_tangentspace(rndstate, get_weights,
 
     tlrot = TLRotate(
         target_domain="tgt",
+        expl_var=expl_var,
         n_components=n_components,
         n_clusters=n_clusters,
     )
@@ -533,8 +560,6 @@ def test_tlclassifier_tangentspace(rndstate, clf, domains_weight):
 def tlclassifier(clf, X, y_enc, domains_weight, n_classes=2):
     n_inputs = X.shape[0]
 
-    if hasattr(clf, "probability"):
-        clf.set_params(**{"probability": True})
     tlclf = TLClassifier(
         target_domain="target_domain",
         estimator=clf,

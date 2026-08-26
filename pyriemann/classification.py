@@ -1,5 +1,6 @@
 """Classification."""
 import functools
+import warnings
 
 from joblib import Parallel, delayed
 import numpy as np
@@ -61,6 +62,8 @@ class MDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
         (n_cpus + 1 + n_jobs) are used. Thus for n_jobs = -2, all CPUs but one
         are used.
 
+        .. versionadded:: 0.2.3
+
     Attributes
     ----------
     classes_ : ndarray, shape (n_classes,)
@@ -68,9 +71,22 @@ class MDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
     covmeans_ : ndarray, shape (n_classes, n_channels, n_channels)
         Centroids for each class.
 
+        .. versionchanged:: 0.6
+            Change list of ndarrays into a ndarray.
+
+    Notes
+    -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.2.3
+        Add parameter ``n_jobs``.
+        Add parameter ``sample_weight`` to ``fit()``.
+    .. versionchanged:: 0.2.4
+        Add ``predict_proba()``.
+    .. versionchanged:: 0.7
+        Add support for HPD matrices.
+
     See Also
     --------
-    Kmeans
     FgMDM
     KNearestNeighbor
 
@@ -104,6 +120,8 @@ class MDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
             Labels for each matrix.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.2.3
 
         Returns
         -------
@@ -182,6 +200,10 @@ class MDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
         -------
         prob : ndarray, shape (n_matrices, n_classes)
             Probabilities for each class.
+
+        Notes
+        -----
+        .. versionadded:: 0.2.4
         """
         return softmax(-self._predict_distances(X) ** 2)
 
@@ -224,11 +246,18 @@ class FgMDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
     classes_ : ndarray, shape (n_classes,)
         Labels for each class.
 
+    Notes
+    -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.2.6
+        Add ``predict_proba()``.
+    .. versionchanged:: 0.4
+        Add parameter ``sample_weight`` to ``fit()``.
+
     See Also
     --------
+    :class:`pyriemann.tangentspace.FGDA`
     MDM
-    FGDA
-    TangentSpace
 
     References
     ----------
@@ -261,6 +290,8 @@ class FgMDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
             Labels for each matrix.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.4
 
         Returns
         -------
@@ -302,6 +333,10 @@ class FgMDM(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
         -------
         prob : ndarray, shape (n_matrices, n_classes)
             The softmax probabilities for each class.
+
+        Notes
+        -----
+        .. versionadded:: 0.2.6
         """
         cov = self._fgda.transform(X)
         return self._mdm.predict_proba(cov)
@@ -354,13 +389,15 @@ class TSClassifier(SpdClassifMixin, BaseEstimator):
 
     See Also
     --------
-    TangentSpace
+    :class:`pyriemann.tangentspace.TangentSpace`
 
     Notes
     -----
     .. versionadded:: 0.2.4
+    .. versionchanged:: 0.4
+        Add parameter ``sample_weight`` to ``fit()``.
     .. versionchanged:: 0.8
-        Rename TSclassifier into TSClassifier.
+        Rename ``TSclassifier`` into ``TSClassifier``.
 
     References
     ----------
@@ -389,6 +426,8 @@ class TSClassifier(SpdClassifMixin, BaseEstimator):
             Labels for each matrix.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.4
 
         Returns
         -------
@@ -477,10 +516,13 @@ class KNearestNeighbor(MDM):
     Notes
     -----
     .. versionadded:: 0.2.4
+    .. versionchanged:: 0.3
+        Add ``predict_proba()``.
+    .. versionchanged:: 0.8
+        Add support for HPD matrices.
 
     See Also
     --------
-    Kmeans
     MDM
     """
 
@@ -543,6 +585,10 @@ class KNearestNeighbor(MDM):
         -------
         prob : ndarray, shape (n_matrices, n_classes)
             Probabilities for each class.
+
+        Notes
+        -----
+        .. versionadded:: 0.3
         """
         n_matrices, _, _ = X.shape
 
@@ -565,8 +611,8 @@ class KNearestNeighbor(MDM):
 class SVC(sklearnSVC):
     """Classification by support-vector machine.
 
-    Support-vector machine (SVM) classification with precomputed Riemannian
-    kernel matrix according to different metrics as described in [1]_.
+    Support-vector machine (SVM) classification with a precomputed
+    kernel matrix [1]_, according to different metrics.
 
     Parameters
     ----------
@@ -593,11 +639,14 @@ class SVC(sklearnSVC):
         is a squared l2 penalty.
     shrinking : bool, default=True
         Whether to use the shrinking heuristic.
-    probability : bool, default=False
+    probability : bool, default="deprecated"
         Whether to enable probability estimates. This must be enabled prior
         to calling ``fit``, will slow down that method as it internally uses
         5-fold cross-validation, and ``predict_proba`` may be inconsistent with
         ``predict``.
+
+        .. deprecated:: 0.13
+            This parameter is deprecated and will be removed in version 0.15.0.
     tol : float, default=1e-3
         Tolerance for stopping criterion.
     cache_size : float, default=200
@@ -636,6 +685,10 @@ class SVC(sklearnSVC):
     Notes
     -----
     .. versionadded:: 0.3
+    .. versionchanged:: 0.4
+        Use parameter ``sample_weight`` in ``fit()``.
+    .. versionchanged:: 0.13
+        Deprecate parameter ``probability`` and add ``predict_proba()``.
 
     References
     ----------
@@ -656,7 +709,7 @@ class SVC(sklearnSVC):
         Cref=None,
         C=1.0,
         shrinking=True,
-        probability=False,
+        probability="deprecated",
         tol=1e-3,
         cache_size=200,
         class_weight=None,
@@ -667,6 +720,15 @@ class SVC(sklearnSVC):
         random_state=None
     ):
         """Init."""
+        if probability != "deprecated":
+            warnings.warn(
+                "probability parameter is deprecated and will be removed in "
+                "version 0.15.0. Use predict_proba() directly instead, "
+                "which now works without this parameter.",
+                FutureWarning,
+                stacklevel=2
+            )
+
         self.Cref = Cref
         self.metric = metric
         self.Cref_ = None
@@ -675,7 +737,7 @@ class SVC(sklearnSVC):
             kernel="precomputed",
             C=C,
             shrinking=shrinking,
-            probability=probability,
+            probability="deprecated",
             tol=tol,
             cache_size=cache_size,
             class_weight=class_weight,
@@ -742,6 +804,28 @@ class SVC(sklearnSVC):
                 f"{self.kernel}."
             )
 
+    def predict_proba(self, X):
+        """Predict class probabilities using decision function.
+
+        This method computes probability estimates using the decision function
+        and applying softmax calibration.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_matrices, n_channels, n_channels)
+            Set of SPD matrices.
+
+        Returns
+        -------
+        prob : ndarray, shape (n_matrices, n_classes)
+            Class probabilities for each matrix.
+        """
+        decision = self.decision_function(X)
+        if len(decision.shape) == 1:
+            decision = np.vstack([-decision, decision]).T
+        prob = softmax(decision)
+        return prob
+
 
 class MeanField(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
     """Classification by Mean Field.
@@ -759,15 +843,16 @@ class MeanField(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
     method_combination : {"sum_means", "inf_means", None}, default="sum_means"
         Method to combine distances from the different means of the field:
 
-        * sum_means: the classifier assigns the matrix to the class whom the
+        * "sum_means": the classifier assigns the matrix to the class whom the
           sum of distances to means of the field is the lowest [1]_;
-        * inf_means: the classifier assigns the matrix to the class of the
+        * "inf_means": the classifier assigns the matrix to the class of the
           nearest mean of the field [1]_;
         * None: the transformer extracts all distances, without combination
           [2]_.
 
         .. versionchanged:: 0.10
-            Rename method_label into method_combination, and add None option.
+            Rename ``method_label`` into ``method_combination``,
+            and add ``None`` option.
     metric : string, default="riemann"
         Metric used for distance estimation during prediction.
         For the list of supported metrics,
@@ -783,13 +868,18 @@ class MeanField(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
         .. versionchanged:: 0.10
             Change dict of dicts of ndarrays into a ndarray.
 
-    See Also
-    --------
-    MDM
-
     Notes
     -----
     .. versionadded:: 0.3
+    .. versionchanged:: 0.8
+        Add support for HPD matrices.
+    .. versionchanged:: 0.10
+        Rename parameter ``method_label`` into ``method_combination``,
+        and add ``None`` option.
+
+    See Also
+    --------
+    MDM
 
     References
     ----------
@@ -993,15 +1083,15 @@ class NearestConvexHull(SpdClassifMixin, SpdTransfMixin, BaseEstimator):
     classmats_ : ndarray, shape (n_matrices,)
         Labels of training set.
 
-    See Also
-    --------
-    MDM
-
     Notes
     -----
     .. versionadded:: 0.10
     .. versionchanged:: 0.11
         Add support for Euclidean metric.
+
+    See Also
+    --------
+    MDM
 
     References
     ----------
@@ -1224,11 +1314,11 @@ def class_distinctiveness(X, y, exponent=1, metric="riemann",
         Parameter for exponentiation of distances, corresponding to p in the
         above equations:
 
-        - exponent = 1 gives the formula originally defined in [1]_;
-        - exponent = 2 gives the Fisher criterion generalized on the manifold,
+        * exponent = 1 gives the formula originally defined in [1]_;
+        * exponent = 2 gives the Fisher criterion generalized on the manifold,
           ie the ratio of the variance between the classes to the variance
           within the classes.
-    metric : string | dict, default="riemann"
+    metric : str | dict, default="riemann"
         Metric used for mean estimation (for the list of supported metrics,
         see :func:`pyriemann.geometry.mean.gmean`) and for distance estimation
         (see :func:`pyriemann.geometry.distance.distance`).
@@ -1251,6 +1341,8 @@ def class_distinctiveness(X, y, exponent=1, metric="riemann",
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.8
+        Add support for HPD matrices.
 
     References
     ----------

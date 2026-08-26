@@ -134,12 +134,15 @@ class Kmeans(SpdClassifMixin, SpdClustMixin, SpdTransfMixin, BaseEstimator):
 
     Notes
     -----
-    .. versionadded:: 0.2.2
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.8
+        Add support for HPD matrices.
 
     See Also
     --------
-    Kmeans
-    MDM
+    :class:`pyriemann.classification.MDM`
+    MeanShift
+    GaussianMixture
 
     References
     ----------
@@ -291,6 +294,12 @@ class KmeansPerClassTransform(SpdTransfMixin, BaseEstimator):
         Centroids of each cluster of each class, with n_centroids <=
         n_clusters x n_classes.
 
+    Notes
+    -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.8
+        Add support for HPD matrices.
+
     See Also
     --------
     Kmeans
@@ -366,7 +375,7 @@ ker_clust_functions = {
 }
 
 
-class MeanShift(SpdClustMixin, BaseEstimator):
+class MeanShift(SpdClustMixin, SpdTransfMixin, BaseEstimator):
     """Clustering by mean shift with SPD/HPD matrices as inputs.
 
     The mean shift is a non-parametric clustering method used to find clusters
@@ -409,10 +418,13 @@ class MeanShift(SpdClustMixin, BaseEstimator):
     Notes
     -----
     .. versionadded:: 0.9
+    .. versionchanged:: 0.13
+        Add ``transform()``.
 
     See Also
     --------
     Kmeans
+    GaussianMixture
 
     References
     ----------
@@ -513,6 +525,30 @@ class MeanShift(SpdClustMixin, BaseEstimator):
 
         return out_modes
 
+    def transform(self, X):
+        """Get the distance to each mode.
+
+        Parameters
+        ----------
+        X : ndarray, shape (n_matrices, n_channels, n_channels)
+            Set of SPD/HPD matrices.
+
+        Returns
+        -------
+        dist : ndarray, shape (n_matrices, n_modes)
+            Distance to each mode.
+
+        Notes
+        -----
+        .. versionadded:: 0.13
+        """
+        dist = Parallel(n_jobs=self.n_jobs)(
+            delayed(distance)(X, mode, self._metric_dist)
+            for mode in self.modes_
+        )
+        dist = np.concatenate(dist, axis=1)
+        return dist
+
     def predict(self, X):
         """Get the predictions.
 
@@ -526,11 +562,7 @@ class MeanShift(SpdClustMixin, BaseEstimator):
         pred : ndarray of int, shape (n_matrices,)
             Prediction for each matrix according to the closest mode.
         """
-        dist = Parallel(n_jobs=self.n_jobs)(
-            delayed(distance)(X, mode, self._metric_dist)
-            for mode in self.modes_
-        )
-        dist = np.concatenate(dist, axis=1)
+        dist = self.transform(X)
         return dist.argmin(axis=1)
 
 
@@ -694,6 +726,11 @@ class GaussianMixture(SpdClustMixin, BaseEstimator):
     Notes
     -----
     .. versionadded:: 0.11
+
+    See Also
+    --------
+    Kmeans
+    MeanShift
 
     References
     ----------
@@ -950,18 +987,18 @@ def __getattr__(name):
     if name == "Potato":
         warnings.warn(
             "clustering.Potato is deprecated and will be removed in 0.14.0; "
-            "use artifactdetection.Potato instead.",
+            "use artifact_detection.Potato instead.",
             DeprecationWarning,
             stacklevel=2
         )
-        from .artifactdetection import Potato
+        from .artifact_detection import Potato
         return Potato
     elif name == "PotatoField":
         warnings.warn(
             "clustering.PotatoField is deprecated and will be removed in "
-            "0.14.0; use artifactdetection.PotatoField instead.",
+            "0.14.0; use artifact_detection.PotatoField instead.",
             DeprecationWarning,
             stacklevel=2
         )
-        from .artifactdetection import PotatoField
+        from .artifact_detection import PotatoField
         return PotatoField

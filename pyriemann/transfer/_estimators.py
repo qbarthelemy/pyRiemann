@@ -123,11 +123,27 @@ class TLCenter(TransformerMixin, BaseEstimator):
     Parameters
     ----------
     target_domain : str
-        Domain to consider as target in ``transform()`` function:
+        Domain to consider as target in ``transform()`` function.
 
-        * if not empty, ``transform()`` recenters matrices to the specified
-          target domain;
-        * else, ``transform()`` recenters matrices to the last fitted domain.
+        If ``"transductive"``:
+            ``transform()`` ignores ``centers_`` and instead recenters inputs
+            to their own mean, recomputed from the matrices or vectors passed
+            to ``transform()``.
+            This is useful at test time in a leave-one-subject/session-out
+            setting, when the test domain was never seen during ``fit()`` and
+            therefore has no stored center in ``centers_``.
+            This unsupervised re-estimation of the center on unseen data was
+            originally proposed for inter-session adaptation [3]_.
+        Elif ``"last"``:
+            ``transform()`` recenters inputs to the last fitted domain.
+        Else:
+            ``transform()`` recenters inputs to the specified target domain.
+
+        .. versionchanged:: 0.7
+            Add ``""`` option to recenter inputs to the last fitted domain.
+        .. versionchanged:: 0.13
+            Add ``"transductive"`` option for transductive estimation of
+            centers. Replace option ``""`` by ``"last"``.
     metric : str, default="riemann"
         For inputs in manifold,
         metric used for mean estimation. For the list of supported metrics,
@@ -139,12 +155,24 @@ class TLCenter(TransformerMixin, BaseEstimator):
     ----------
     centers_ : dict
         Dictionary with key=domain_name and value=domain_center.
+        Not used by ``transform()`` when ``target_domain="transductive"``.
+
+        .. versionchanged:: 0.8
+            Rename ``recenter_`` into ``centers_``.
 
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.6
+        Add parameter ``sample_weight`` to ``fit()`` and ``fit_transform()``.
+    .. versionchanged:: 0.7
+        Add ``""`` option to parameter ``target_domain``,
+        to recenter inputs to the last fitted domain.
     .. versionchanged:: 0.8
         Add support for tangent space centering.
+    .. versionchanged:: 0.13
+        Add ``"transductive"`` option to parameter ``target_domain``,
+        for transductive estimation of centers.
 
     References
     ----------
@@ -157,6 +185,11 @@ class TLCenter(TransformerMixin, BaseEstimator):
         A Euclidean Space Data Alignment Approach
         <https://arxiv.org/abs/1808.05464>`_
         He He and Dongrui Wu, IEEE Transactions on Biomedical Engineering, 2019
+    .. [3] `Classification of covariance matrices using a Riemannian-based
+        kernel for BCI applications
+        <https://hal.science/hal-00820475>`_
+        A Barachant, S Bonnet, M Congedo, C Jutten, Neurocomputing, vol. 112,
+        pp. 172-178, 2013
     """
 
     def __init__(self, target_domain, metric="riemann"):
@@ -180,6 +213,8 @@ class TLCenter(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,) or \
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
+
+            .. versionadded:: 0.6
 
         Returns
         -------
@@ -215,8 +250,9 @@ class TLCenter(TransformerMixin, BaseEstimator):
 
         .. note::
            This method is designed for using at test time,
-           recentering all inputs in target domain, or in the last fitted
-           domain.
+           recentering all inputs in target domain;
+           or in the last fitted domain when ``target_domain="last"``;
+           or to their own mean when ``target_domain="transductive"``.
 
         Parameters
         ----------
@@ -232,8 +268,21 @@ class TLCenter(TransformerMixin, BaseEstimator):
         """
         _check_inputs(X)
 
+        if self.target_domain == "transductive":
+            if X.ndim == 3:
+                return Whitening(metric=self.metric).fit_transform(X)
+            return X - np.mean(X, axis=0)
+
+        if self.target_domain == "":
+            warnings.warn(
+                "Empty string for target_domain is deprecated and will be "
+                "removed in 0.15.0; use target_domain=\"last\" instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+
         # if target domain is specified, use it
-        if self.target_domain != "":
+        if self.target_domain not in ("", "last"):
             target_domain = self.target_domain
         # else, use last calibrated domain as target domain
         else:
@@ -242,7 +291,7 @@ class TLCenter(TransformerMixin, BaseEstimator):
         if X.ndim == 3:
             X_new = self.centers_[target_domain].transform(X)
         else:
-            X_new = X - self.centers_[self.target_domain]
+            X_new = X - self.centers_[target_domain]
 
         return X_new
 
@@ -267,6 +316,8 @@ class TLCenter(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,) or \
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
+
+            .. versionadded:: 0.6
 
         Returns
         -------
@@ -327,15 +378,21 @@ class TLScale(TransformerMixin, BaseEstimator):
     scales_ : dict
         Dictionary with key=domain_name and value=domain_scale.
 
-    See Also
-    --------
-    TLCenter
+        .. versionchanged:: 0.8
+            Rename ``dispersions_`` into ``scales_``.
 
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.6
+        Add parameter ``sample_weight`` to ``fit()`` and ``fit_transform()``.
     .. versionchanged:: 0.8
+        Rename ``TLStretch`` into ``TLScale``.
         Add support for tangent space scaling.
+
+    See Also
+    --------
+    TLCenter
 
     References
     ----------
@@ -376,6 +433,8 @@ class TLScale(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,) or \
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
+
+            .. versionadded:: 0.6
 
         Returns
         -------
@@ -488,6 +547,8 @@ class TLScale(TransformerMixin, BaseEstimator):
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
 
+            .. versionadded:: 0.6
+
         Returns
         -------
         X_new : ndarray, shape (n_matrices, n_channels, n_channels) or \
@@ -569,24 +630,33 @@ class TLRotate(TransformerMixin, BaseEstimator):
     tol_step : float, default=1e-9
         For inputs in manifold, stopping criterion based on the norm of
         the descent direction.
+
+        .. versionadded:: 0.11
     maxiter : int, default=10_000
         For inputs in manifold, maximum number of iterations in the
         optimization procedure.
+
+        .. versionadded:: 0.11
 
     Attributes
     ----------
     rotations_ : dict
         Dictionary with key=domain_name and value=domain_rotation_matrix.
 
-    See Also
-    --------
-    TLCenter
-
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.6
+        Add parameter ``sample_weight`` to ``fit()`` and ``fit_transform()``.
     .. versionchanged:: 0.8
         Add support for tangent space rotation.
+        Add support for multisource domains in tangent space.
+    .. versionchanged:: 0.11
+        Add parameters ``tol_step`` and ``maxiter``.
+
+    See Also
+    --------
+    TLCenter
 
     References
     ----------
@@ -644,6 +714,8 @@ class TLRotate(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,) or \
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
+
+            .. versionadded:: 0.6
 
         Returns
         -------
@@ -839,6 +911,8 @@ class TLRotate(TransformerMixin, BaseEstimator):
                 shape (n_vectors,), default=None
             Weights for each matrix or vector. If None, it uses equal weights.
 
+            .. versionadded:: 0.6
+
         Returns
         -------
         X_new : ndarray, shape (n_matrices, n_classes)
@@ -893,6 +967,8 @@ class TLEstimator(BaseEstimator):
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.8
+        Add support for tangent space estimation.
     """
 
     def __init__(self, target_domain, estimator, domain_weight=None):
@@ -988,11 +1064,13 @@ class TLClassifier(TLEstimator):
 
     See Also
     --------
-    TLRegressor
+    MDWM
 
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.8
+        Add support for tangent space classification.
     """
 
     def fit(self, X, y_enc):
@@ -1071,13 +1149,11 @@ class TLRegressor(TLEstimator):
         The dict contains key=domain_name and value=weight_to_assign.
         If None, it uses equal weights.
 
-    See Also
-    --------
-    TLClassifier
-
     Notes
     -----
     .. versionadded:: 0.4
+    .. versionchanged:: 0.8
+        Add support for tangent space regression.
     """
 
     def fit(self, X, y_enc):
@@ -1167,9 +1243,16 @@ class MDWM(MDM):
     covmeans_ : ndarray, shape (n_classes, n_channels, n_channels)
         Centroids for each class.
 
+        .. versionchanged:: 0.6
+            Change list of ndarrays into a ndarray.
+
+    Notes
+    -----
+    .. versionadded:: 0.4
+
     See Also
     --------
-    MDM
+    :class:`pyriemann.classification.MDM`
 
     References
     ----------
@@ -1184,10 +1267,6 @@ class MDWM(MDM):
         S. Khazem, S. Chevallier, Q. Barthelemy, K. Haroun and C. Nous, 10th
         International IEEE/EMBS Conference on Neural Engineering (NER), pp.
         523-526. IEEE, 2021.
-
-    Notes
-    -----
-    .. versionadded:: 0.4
     """
 
     def __init__(
@@ -1276,7 +1355,7 @@ class MDWM(MDM):
         return self
 
     def score(self, X, y_enc, sample_weight=None):
-        """Return the mean accuracy on the given test data and labels.
+        """Return the mean accuracy on the given test matrices and labels.
 
         Parameters
         ----------

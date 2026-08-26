@@ -9,7 +9,6 @@ from .utils._check import check_metric
 
 
 class TangentSpace(TransformerMixin, BaseEstimator):
-
     """Tangent space projection.
 
     Tangent space projection maps a set of SPD/HPD matrices to their
@@ -56,9 +55,17 @@ class TangentSpace(TransformerMixin, BaseEstimator):
     reference_ : ndarray, shape (n_channels, n_channels)
         If fit, the reference matrix for tangent space mapping.
 
+    Notes
+    -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.2.3
+        Add parameter ``sample_weight`` to ``fit()`` and ``fit_transform()``.
+    .. versionchanged:: 0.10
+        Add support for HPD matrices.
+
     See Also
     --------
-    FgMDM
+    :class:`pyriemann.classification.FgMDM`
     FGDA
 
     References
@@ -91,6 +98,8 @@ class TangentSpace(TransformerMixin, BaseEstimator):
             Not used, here for compatibility with sklearn API.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.2.3
 
         Returns
         -------
@@ -171,6 +180,8 @@ class TangentSpace(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
 
+            .. versionadded:: 0.2.3
+
         Returns
         -------
         ts : ndarray, shape (n_matrices, n_ts)
@@ -210,7 +221,6 @@ class TangentSpace(TransformerMixin, BaseEstimator):
 
 
 class FGDA(TransformerMixin, BaseEstimator):
-
     """Fisher geodesic discriminant analysis.
 
     Fisher geodesic discriminant analysis (FGDA)
@@ -238,9 +248,15 @@ class FGDA(TransformerMixin, BaseEstimator):
     classes_ : ndarray, shape (n_classes,)
         Labels for each class.
 
+    Notes
+    -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.2.3
+        Add parameter ``sample_weight`` to ``fit()`` and ``fit_transform()``.
+
     See Also
     --------
-    FgMDM
+    :class:`pyriemann.classification.FgMDM`
     TangentSpace
 
     References
@@ -295,6 +311,8 @@ class FGDA(TransformerMixin, BaseEstimator):
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
 
+            .. versionadded:: 0.2.3
+
         Returns
         -------
         self : FGDA instance
@@ -331,6 +349,8 @@ class FGDA(TransformerMixin, BaseEstimator):
             Not used, here for compatibility with sklearn API.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.2.3
 
         Returns
         -------

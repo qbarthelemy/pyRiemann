@@ -23,24 +23,26 @@ class Whitening(TransformerMixin, BaseEstimator):
         For the list of supported metrics,
         see :func:`pyriemann.geometry.mean.gmean`.
     dim_red : None | dict, default=None
-        If ``None`` :
-            no dimension reduction during whitening.
-        If ``{'n_components': val}`` :
-            dimension reduction defining the number of components;
-            ``val`` must be an integer superior to 1.
-        If ``{'expl_var': val}`` :
-            dimension reduction selecting the number of components such that
-            the amount of variance that needs to be explained is greater than
-            the percentage specified by ``val``.
-            ``val`` must be a float in (0,1], typically ``0.99``.
-        If ``{'max_cond': val}`` :
-            dimension reduction selecting the number of components such that
-            the condition number of the mean matrix is lower than ``val``.
-            This threshold has a physiological interpretation, because it can
-            be viewed as the ratio between the power of the strongest component
-            (usually, eye-blink source) and the power of the lowest component
-            you don't want to keep (acquisition sensor noise).
-            ``val`` must be a float strictly superior to 1, typically 100.
+        Parameter for dimension reduction:
+
+        * ``None``:
+          no dimension reduction during whitening.
+        * ``{'n_components': val}``:
+          dimension reduction defining the number of components;
+          ``val`` must be an integer superior to 1.
+        * ``{'expl_var': val}``:
+          dimension reduction selecting the number of components such that
+          the amount of variance that needs to be explained is greater than
+          the percentage specified by ``val``.
+          ``val`` must be a float in (0,1], typically ``0.99``.
+        * ``{'max_cond': val}``:
+          dimension reduction selecting the number of components such that
+          the condition number of the mean matrix is lower than ``val``.
+          This threshold has a physiological interpretation, because it can
+          be viewed as the ratio between the power of the strongest component
+          (usually, eye-blink source) and the power of the lowest component
+          you don't want to keep (acquisition sensor noise).
+          ``val`` must be a float strictly superior to 1, typically 100.
     verbose : bool, default=False
         Verbose flag.
 
@@ -56,7 +58,9 @@ class Whitening(TransformerMixin, BaseEstimator):
     Notes
     -----
     .. versionadded:: 0.2.7
-
+    .. versionchanged:: 0.7
+        Add ``partial_fit()``.
+        Add parameter ``sample_weight`` to ``partial_fit()``.
     """
 
     def __init__(self, metric="euclid", dim_red=None, verbose=False):
@@ -188,6 +192,8 @@ class Whitening(TransformerMixin, BaseEstimator):
             Ignored as unsupervised.
         sample_weight : None | ndarray, shape (n_matrices,), default=None
             Weights for each matrix. If None, it uses equal weights.
+
+            .. versionadded:: 0.7
         alpha : float | None, default=None
             Update rate in [0, 1] for the mean: 0 for no update, 1 for full
             update.

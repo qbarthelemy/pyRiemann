@@ -2,6 +2,7 @@ from array_api_compat import array_namespace as get_namespace
 import numpy as np
 from numpy.testing import assert_array_equal, assert_array_almost_equal
 import pytest
+from scipy.linalg import solve_continuous_lyapunov
 
 from conftest import approx, to_numpy
 from pyriemann.geometry.distance import distance, distance_riemann
@@ -29,12 +30,14 @@ from pyriemann.geometry.tangentspace import (
     innerproduct_logchol,
     innerproduct_logeuclid,
     innerproduct_riemann,
+    innerproduct_wasserstein,
     norm,
     transport,
     transport_euclid,
     transport_logchol,
     transport_logeuclid,
     transport_riemann,
+    transport_wasserstein,
 )
 from pyriemann.geometry.test import is_hermitian, is_real
 from pyriemann.spatialfilters import Whitening
@@ -93,22 +96,13 @@ def test_map_log_exp(kind, metric, get_mats):
 
 @pytest.mark.parametrize("kind", ["spd", "hpd"])
 @pytest.mark.parametrize(
-    "log_map_, exp_map_", zip(
-        [
-            log_map_euclid,
-            log_map_logchol,
-            log_map_logeuclid,
-            log_map_riemann,
-            log_map_wasserstein,
-        ],
-        [
-            exp_map_euclid,
-            exp_map_logchol,
-            exp_map_logeuclid,
-            exp_map_riemann,
-            exp_map_wasserstein,
-        ]
-    )
+    "log_map_, exp_map_", [
+        (log_map_euclid, exp_map_euclid),
+        (log_map_logchol, exp_map_logchol),
+        (log_map_logeuclid, exp_map_logeuclid),
+        (log_map_riemann, exp_map_riemann),
+        (log_map_wasserstein, exp_map_wasserstein),
+    ]
 )
 def test_maps_log_exp(kind, log_map_, exp_map_, get_mats):
     """Test log then exp maps should be identity"""
@@ -223,7 +217,7 @@ def test_tangent_and_untangent_space(kind, metric, get_mats):
 
 ###############################################################################
 
-metrics = ["euclid", "logchol", "logeuclid", "riemann"]
+metrics = ["euclid", "logchol", "logeuclid", "riemann", "wasserstein"]
 
 
 @pytest.mark.parametrize("metric", metrics)
@@ -267,10 +261,6 @@ def test_innerproduct_x_x(kindX, kindC, metric, get_mats):
     G1 = innerproduct(X, None, Cref, metric=metric)
     assert_array_equal(G, G1)
 
-    Xexp = exp_map(X, Cref, metric=metric, Cm12=True)
-    G2 = distance(Xexp, Cref, metric=metric, squared=True)
-    assert_array_almost_equal(G, G2.flatten())
-
 
 @pytest.mark.parametrize("kindX, kindC", [("sym", "spd"), ("herm", "hpd")])
 @pytest.mark.parametrize("metric", metrics)
@@ -292,6 +282,7 @@ def test_innerproduct_x_y(kindX, kindC, metric, get_mats):
         innerproduct_logchol,
         innerproduct_logeuclid,
         innerproduct_riemann,
+        innerproduct_wasserstein,
     ],
 )
 def test_innerproduct_broadcasting(finnerproduct, backend, get_mats):
@@ -310,6 +301,20 @@ def test_innerproduct_broadcasting(finnerproduct, backend, get_mats):
     C = xp.stack([A for _ in range(n_sets)])
     D = xp.stack([B for _ in range(n_sets)])
     assert finnerproduct(C, D, Cref).shape == (n_sets, n_matrices)  # 4D arrays
+
+
+@pytest.mark.parametrize("kindX, kindC", [("sym", "spd"), ("herm", "hpd")])
+@pytest.mark.parametrize("metric", metrics)
+def test_innerproduct_property_distance(kindX, kindC, metric, get_mats):
+    """Test d(C,exp_C(X))^2 = g_C(X,X) locally"""
+    n_matrices, n_channels = 5, 3
+    X = 0.1 * get_mats(n_matrices, n_channels, kindX)
+    Cref = get_mats(1, n_channels, kindC)[0]
+    G = innerproduct(X, X, Cref, metric=metric)
+
+    Xexp = exp_map(X, Cref, metric=metric, Cm12=True)
+    D2 = distance(Xexp, Cref, metric=metric, squared=True)
+    assert_array_almost_equal(D2.flatten(), G)
 
 
 @pytest.mark.parametrize("kindX, kindC", [("sym", "spd"), ("herm", "hpd")])
@@ -395,6 +400,21 @@ def test_innerproduct_riemann(kindX, kindC, get_mats):
 
 
 @pytest.mark.parametrize("kindX, kindC", [("sym", "spd"), ("herm", "hpd")])
+def test_innerproduct_wasserstein(kindX, kindC, get_mats):
+    n_channels = 4
+    X, Y = get_mats(2, n_channels, kindX)
+    Cref = get_mats(1, n_channels, kindC)[0]
+    G = innerproduct_wasserstein(X, Y, Cref)
+    xp = get_namespace(X)
+
+    # Eq(6) in [Malago2018]
+    LX = xp.asarray(solve_continuous_lyapunov(Cref, X))
+    LY = xp.asarray(solve_continuous_lyapunov(Cref, Y))
+    G1 = xp.real(xp.trace(LX @ Cref @ LY))
+    assert_array_almost_equal(G, G1)
+
+
+@pytest.mark.parametrize("kindX, kindC", [("sym", "spd"), ("herm", "hpd")])
 @pytest.mark.parametrize("metric", metrics)
 def test_norm_properties(kindX, kindC, metric, backend, get_mats):
     n_channels = 4
@@ -422,6 +442,7 @@ def test_norm_properties(kindX, kindC, metric, backend, get_mats):
     transport_logchol,
     transport_logeuclid,
     transport_riemann,
+    transport_wasserstein,
 ])
 def test_transport_broadcasting(ftransport, get_mats):
     n_dim5, n_dim4, n_matrices, n_channels = 2, 4, 7, 3
@@ -453,6 +474,7 @@ def test_transport_broadcasting(ftransport, get_mats):
     "logchol",
     "logeuclid",
     "riemann",
+    "wasserstein",
 ])
 def test_transport_properties(kindX, kindAB, metric, get_mats, rndstate):
     n_matrices, n_channels = 10, 3
@@ -481,8 +503,8 @@ def test_transport_properties(kindX, kindAB, metric, get_mats, rndstate):
     xp = get_namespace(X)
     Xt_ABBC = transport(transport(X, A, B, metric), B, C, metric)
     alphas = np.linspace(0, 1, 5)
-    G_AB = [geodesic(A, B, alpha) for alpha in alphas]
-    G_BC = [geodesic(B, C, alpha) for alpha in alphas]
+    G_AB = [geodesic(A, B, alpha, metric=metric) for alpha in alphas]
+    G_BC = [geodesic(B, C, alpha, metric=metric) for alpha in alphas]
     G = xp.stack(G_AB + G_BC)
     Xt_AC = xp.asarray(X, copy=True)
     for i in range(len(G)-1):
@@ -509,3 +531,66 @@ def test_transport_riemann_vs_whitening(get_mats):
     Tt = transport(T, M, np.eye(n_channels), metric="riemann")
     Xt = exp_map_riemann(Tt, np.eye(n_channels), Cm12=True)
     assert Xw == approx(Xt)
+
+
+@pytest.mark.numpy_only
+@pytest.mark.parametrize("kindX, kindQ", [("sym", "orth"), ("herm", "unit")])
+def test_transport_wasserstein_commuting(kindX, kindQ, get_mats, rndstate):
+    """BW transport has a closed form for commuting endpoints.
+
+    Table 7 of [Thanwerdas2023], proved in its Appendix A.
+    """
+    n_channels = 4
+    Q = get_mats(1, n_channels, kind=kindQ)[0]
+    Qh = Q.conj().T
+    d = rndstate.uniform(0.5, 3, n_channels)
+    delta = rndstate.uniform(0.5, 3, n_channels)
+    A = Q @ np.diag(d) @ Qh
+    B = Q @ np.diag(delta) @ Qh
+    X = get_mats(6, n_channels, kind=kindX)
+
+    Xt = transport(X, A, B, metric="wasserstein")
+
+    Xr = Qh @ X @ Q
+    fac = np.sqrt(np.add.outer(delta, delta) / np.add.outer(d, d))
+    expected = Q @ (fac * Xr) @ Qh
+    assert Xt == approx(expected)
+
+
+@pytest.mark.numpy_only
+@pytest.mark.parametrize("n_steps", [0, -1, 1.5])
+def test_transport_wasserstein_invalid_n_steps(n_steps, get_mats):
+    """transport_wasserstein rejects non-positive-integer n_steps."""
+    A, B = get_mats(2, 3, "spd")
+    X = get_mats(1, 3, "sym")[0]
+    with pytest.raises(ValueError):
+        transport_wasserstein(X, A, B, n_steps=n_steps)
+
+
+@pytest.mark.numpy_only
+@pytest.mark.parametrize("dtype", [np.int64, np.int32, np.uint8])
+def test_transport_wasserstein_accepts_numpy_int(dtype, get_mats):
+    """n_steps accepts NumPy integers of any width, not just np.int64."""
+    A, B = get_mats(2, 3, "spd")
+    X = get_mats(1, 3, "sym")[0]
+    out_np = transport_wasserstein(X, A, B, n_steps=dtype(20))
+    out_py = transport_wasserstein(X, A, B, n_steps=20)
+    assert out_np == approx(out_py)
+
+
+@pytest.mark.numpy_only
+def test_transport_wasserstein_dispatch_forwards_n_steps(get_mats):
+    """transport(metric='wasserstein') forwards n_steps."""
+    A, B = get_mats(2, 3, "spd")
+    X = get_mats(1, 3, "sym")[0]
+    coarse = transport(X, A, B, metric="wasserstein", n_steps=1)
+    assert coarse == approx(transport_wasserstein(X, A, B, n_steps=1))
+    # n_steps is actually used: a single RK4 step differs from the default
+    assert not np.allclose(
+        to_numpy(coarse),
+        to_numpy(transport(X, A, B, metric="wasserstein")),
+        atol=1e-6,
+    )
+    # integer-like kwargs (e.g. NumPy int) survive the dispatcher too
+    got = transport(X, A, B, metric="wasserstein", n_steps=np.int64(20))
+    assert got == approx(transport_wasserstein(X, A, B, n_steps=20))

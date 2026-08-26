@@ -95,6 +95,11 @@ def distance_euclid(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for complex matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -135,6 +140,10 @@ def distance_harmonic(A, B, squared=False):
 
     Notes
     -----
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for complex invertible matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -180,6 +189,11 @@ def distance_kullback(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2.3
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -233,6 +247,9 @@ def distance_kullback_sym(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2.3
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -345,6 +362,11 @@ def distance_logdet(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -395,6 +417,11 @@ def distance_logeuclid(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -506,6 +533,11 @@ def distance_riemann(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -603,6 +635,11 @@ def distance_wasserstein(A, B, squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2.4
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -612,13 +649,15 @@ def distance_wasserstein(A, B, squared=False):
 
     References
     ----------
-    .. [1] `Optimal transport: old and new
-        <https://link.springer.com/book/10.1007/978-3-540-71050-9>`_
-        C. Villani. Springer Science & Business Media, 2008, vol. 338
-    .. [2] `An extension of Kakutani's theorem on infinite product measures to
+    .. [1] `An extension of Kakutani's theorem on infinite product measures to
         the tensor product of semifinite w*-algebras
         <https://www.ams.org/journals/tran/1969-135-00/S0002-9947-1969-0236719-2/S0002-9947-1969-0236719-2.pdf>`_
         D. Bures. Trans Am Math Soc, 1969, 135, pp. 199-212
+    .. [2] `On the Bures–Wasserstein distance between positive definite
+        matrices
+        <https://www.sciencedirect.com/science/article/pii/S0723086918300021>`_
+        R. Bhatia, T. Jain, Y. Lim. Expositiones mathematicae, 2019, 37,
+        pp. 165-191.
     """  # noqa
     xp = check_matrix_pair(A, B)
     B12 = sqrtm(B)
@@ -673,6 +712,11 @@ def distance(A, B, metric="riemann", squared=False):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 
@@ -980,6 +1024,8 @@ def pairwise_distance(X, Y=None, metric="riemann", squared=False):
     Notes
     -----
     .. versionadded:: 0.2.5
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
 

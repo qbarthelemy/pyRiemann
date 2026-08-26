@@ -1,7 +1,6 @@
 """Geodesics for SPD/HPD matrices."""
 
 from array_api_compat import array_namespace as get_namespace
-from array_api_extra import expand_dims
 
 from ._backend import diag_indices, tril_indices
 from ._check import check_function, check_matrix_pair
@@ -26,7 +25,7 @@ def _check_alpha(alpha, X, axis=(-2, -1)):
             raise ValueError(
                 f"alpha must have shape {expected_shape}, got {alpha.shape}."
             )
-        alpha = expand_dims(alpha, axis=axis)
+        alpha = xpa.expand_dims(alpha, axis=axis)
     else:
         raise ValueError(
             f"alpha must be a float or an array, got {type(alpha)}."
@@ -121,6 +120,11 @@ def geodesic_euclid(A, B, alpha=0.5):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for complex matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
         Add support for array-valued alpha.
@@ -221,6 +225,11 @@ def geodesic_logeuclid(A, B, alpha=0.5):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
         Add support for array-valued alpha.
@@ -273,6 +282,11 @@ def geodesic_riemann(A, B, alpha=0.5):
 
     Notes
     -----
+    .. versionadded:: 0.1
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
         Add support for array-valued alpha.
@@ -362,7 +376,7 @@ def geodesic_wasserstein(A, B, alpha=0.5):
 
     The matrix at position :math:`\alpha` on the Wasserstein geodesic between
     two SPD/HPD matrices :math:`\mathbf{A}` and :math:`\mathbf{B}` is
-    given in [1]_:
+    given in Proposition 4 of [1]_:
 
     .. math::
         \mathbf{C} = (1-\alpha)^2\mathbf{A} + \alpha^2\mathbf{B} +
@@ -459,6 +473,11 @@ def geodesic(A, B, alpha, metric="riemann"):
 
     Notes
     -----
+    .. versionadded:: 0.2
+    .. versionchanged:: 0.3
+        Add broadcasting.
+    .. versionchanged:: 0.5
+        Add support for HPD matrices.
     .. versionchanged:: 0.12
         Add support for NumPy and PyTorch.
         Add support for array-valued alpha.
